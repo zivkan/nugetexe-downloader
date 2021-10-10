@@ -54,10 +54,14 @@ namespace zivkan.nugetexe.downloader
         {
             using (HttpClient httpClient = new())
             {
-                var response = await httpClient.GetAsync(args.Url, HttpCompletionOption.ResponseContentRead);
-                response.EnsureSuccessStatusCode();
+                HttpResponseMessage response;
+                string json;
+                using (response = await httpClient.GetAsync(args.Url, HttpCompletionOption.ResponseContentRead))
+                {
+                    response.EnsureSuccessStatusCode();
 
-                var json = await response.Content.ReadAsStringAsync();
+                    json = await response.Content.ReadAsStringAsync();
+                }
                 var tools = JsonSerializer.Deserialize<Dictionary<string, List<Tool>>>(json);
 
                 if (!tools.TryGetValue("nuget.exe", out List<Tool>? versions))
@@ -90,10 +94,44 @@ namespace zivkan.nugetexe.downloader
                     return 0;
                 }
 
-                Console.WriteLine($"Found {sortedVersions.Count} versions of nuget.exe");
+                var destinationFullPath = args.Destination.FullName;
+                Console.WriteLine($"Directory: " + destinationFullPath);
+
+                if (!args.Destination.Exists)
+                {
+                    try
+                    {
+                        args.Destination.Create();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Unable to create directory '{args.Destination}': {ex.Message}");
+                        return -2;
+                    }
+                }
+
+                var downloadPath = Path.Combine(destinationFullPath, "download.tmp");
+
                 foreach (var version in sortedVersions)
                 {
-                    Console.WriteLine($"  {version.Version}");
+                    var versionString = version.Version.ToNormalizedString().ToLowerInvariant();
+                    var localFullPath = Path.Combine(destinationFullPath, $"NuGet.{versionString}.exe");
+                    if (!File.Exists(localFullPath))
+                    {
+                        Console.WriteLine($"Downloading NuGet.exe {versionString}");
+                        using (var downloadFile = File.Open(downloadPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                        using (response = await httpClient.GetAsync(version.Url, HttpCompletionOption.ResponseHeadersRead))
+                        {
+                            response.EnsureSuccessStatusCode();
+
+                            using (var downloadStream = await response.Content.ReadAsStreamAsync())
+                            {
+                                await downloadStream.CopyToAsync(downloadFile);
+                            }
+                        }
+
+                        File.Move(downloadPath, localFullPath);
+                    }
                 }
             }
 
