@@ -6,6 +6,7 @@ using System.CommandLine.Invocation;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading.Tasks;
 using zivkan.nugetexe.downloader.Model;
@@ -54,6 +55,10 @@ namespace zivkan.nugetexe.downloader
         {
             using (HttpClient httpClient = new())
             {
+                httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("zivkan.nugetexe-downloader", GetProductVersion()));
+                httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("(+https://github.com/zivkan/nugetexe-downloader)"));
+                Console.WriteLine(httpClient.DefaultRequestHeaders.UserAgent.ToString());
+
                 HttpResponseMessage response;
                 string json;
                 using (response = await httpClient.GetAsync(args.Url, HttpCompletionOption.ResponseContentRead))
@@ -136,6 +141,18 @@ namespace zivkan.nugetexe.downloader
             }
 
             return 0;
+        }
+
+        public static string GetProductVersion()
+        {
+            var informationalVersion =
+                typeof(Program)
+                .Assembly
+                .GetCustomAttributes(true)
+                .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+                .Single();
+
+            return informationalVersion.InformationalVersion;
         }
     }
 }
